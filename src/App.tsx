@@ -1,7 +1,11 @@
-import Test from "./test"
+import Crowdfuncing from "./components/MainPage/CrowdfundingMainPage";
 
 function App() {
-  return <div><Test /></div>
+  return (
+    <div>
+      <Crowdfuncing />
+    </div>
+  );
 }
 
-export default App
+export default App;
