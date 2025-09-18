@@ -1,4 +1,6 @@
 import React, { useState } from "react";
+import { ethers } from "ethers";
+import CrowdFundingArtifact from "../../../blockchain/artifacts/contracts/CrowdFunding.sol/Crowdfunding.json";
 
 interface Campaign {
   title: string;
@@ -8,7 +10,12 @@ interface Campaign {
   category: string;
   image: string;
   creator: string;
+  contractAddress?: string;
 }
+
+//ABI and Bytecode from the compiled contract
+const CROWDFUNDING_ABI = CrowdFundingArtifact.abi;
+const CROWDFUNDING_BYTECODE = CrowdFundingArtifact.bytecode;
 
 const formatAddress = (address: string): string => {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -44,7 +51,9 @@ const CreateCampaignForm: React.FC<CreateCampaignFormProps> = ({
     "Social",
   ];
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [isDeploying, setIsDeploying] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (
@@ -57,15 +66,81 @@ const CreateCampaignForm: React.FC<CreateCampaignFormProps> = ({
       return;
     }
 
-    onSubmit({
-      title: formData.title,
-      description: formData.description,
-      goal: parseFloat(formData.goal),
-      daysLeft: parseInt(formData.daysLeft),
-      category: formData.category,
-      image: formData.image,
-      creator: formatAddress(walletAddress),
-    });
+    try {
+      setIsDeploying(true);
+
+      // Check if MetaMask is available
+      if (!window.ethereum) {
+        alert("Please install MetaMask to create a campaign!");
+        return;
+      }
+
+      // Request account access
+      await window.ethereum.request({ method: "eth_requestAccounts" });
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+
+      // Convert goal to Wei (smallest ETH unit)
+      const goalInWei = ethers.parseEther(formData.goal);
+      const daysAsNumber = parseInt(formData.daysLeft);
+
+      // Create contract factory (you'll need to add the ABI and bytecode)
+      const contractFactory = new ethers.ContractFactory(
+        CROWDFUNDING_ABI,
+        CROWDFUNDING_BYTECODE,
+        signer
+      );
+
+      console.log("Deploying contract...");
+
+      // Deploy the contract with constructor parameters
+      const contract = await contractFactory.deploy(daysAsNumber, goalInWei);
+
+      // Wait for the contract to be mined
+      await contract.waitForDeployment();
+
+      // Get the deployed contract address
+      const contractAddress = await contract.getAddress();
+
+      console.log("Contract deployed at:", contractAddress);
+
+      // Submit the campaign data including the contract address
+      onSubmit({
+        title: formData.title,
+        description: formData.description,
+        goal: parseFloat(formData.goal),
+        daysLeft: daysAsNumber,
+        category: formData.category,
+        image: formData.image,
+        creator: formatAddress(walletAddress),
+        contractAddress: contractAddress, // Add this new field
+      });
+
+      // Reset form after successful deployment
+      setFormData({
+        title: "",
+        description: "",
+        goal: "",
+        daysLeft: "",
+        category: "Technology",
+        image:
+          "https://images.unsplash.com/photo-1557804506-669a67965ba0?w=400&h=250&fit=crop",
+      });
+    } catch (error: any) {
+      console.error("Deployment failed:", error);
+
+      // Handle different types of errors
+      if (error.code === 4001) {
+        alert("Transaction rejected by user");
+      } else if (error.message.includes("insufficient funds")) {
+        alert("Insufficient funds to deploy contract");
+      } else {
+        alert("Failed to deploy contract");
+      }
+    } finally {
+      setIsDeploying(false);
+    }
   };
 
   const handleChange = (
