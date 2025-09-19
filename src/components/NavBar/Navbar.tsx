@@ -1,4 +1,5 @@
 import React from "react";
+import { formatAddress } from "../utils/helperFunctions";
 
 interface NavbarProps {
   walletConnected: boolean;
@@ -7,10 +8,6 @@ interface NavbarProps {
   onConnectWallet: () => void;
   onDisconnectWallet: () => void;
 }
-
-const formatAddress = (address: string): string => {
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
-};
 
 const Navbar: React.FC<NavbarProps> = ({
   walletConnected,

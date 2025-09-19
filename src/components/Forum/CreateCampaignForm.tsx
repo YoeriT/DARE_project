@@ -17,10 +17,6 @@ interface Campaign {
 const CROWDFUNDING_ABI = CrowdFundingArtifact.abi;
 const CROWDFUNDING_BYTECODE = CrowdFundingArtifact.bytecode;
 
-const formatAddress = (address: string): string => {
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
-};
-
 interface CreateCampaignFormProps {
   onSubmit: (campaign: Campaign) => void;
   onCancel: () => void;
@@ -113,8 +109,8 @@ const CreateCampaignForm: React.FC<CreateCampaignFormProps> = ({
         daysLeft: daysAsNumber,
         category: formData.category,
         image: formData.image,
-        creator: formatAddress(walletAddress),
-        contractAddress: contractAddress, // Add this new field
+        creator: walletAddress,
+        contractAddress: contractAddress,
       });
 
       // Reset form after successful deployment
