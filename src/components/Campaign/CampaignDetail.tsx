@@ -22,6 +22,7 @@ interface CampaignDetailProps {
   campaign: Campaign;
   onBack: () => void;
   onDonate: (amount: number) => Promise<void>;
+  onClaimFunds: () => Promise<void>;
   walletConnected: boolean;
   isOwner: boolean;
 }
@@ -30,6 +31,7 @@ const CampaignDetail: React.FC<CampaignDetailProps> = ({
   campaign,
   onBack,
   onDonate,
+  onClaimFunds,
   walletConnected,
   isOwner,
 }) => {
@@ -41,7 +43,24 @@ const CampaignDetail: React.FC<CampaignDetailProps> = ({
 
   //Donation functions
   const handleDonateClick = () => {
-    setShowDonationForm(true);
+    if (isOwner && progress >= 100) {
+      // Owner claiming funds
+      handleClaimFunds();
+    } else {
+      // Regular user donating
+      setShowDonationForm(true);
+    }
+  };
+
+  const handleClaimFunds = async () => {
+    setIsSubmitting(true);
+    try {
+      await onClaimFunds();
+    } catch (error) {
+      console.error("Claim failed:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleCancelDonation = () => {
@@ -332,9 +351,19 @@ const CampaignDetail: React.FC<CampaignDetailProps> = ({
                               <button
                                 className="btn btn-success btn-lg"
                                 onClick={handleDonateClick}
+                                disabled={isSubmitting}
                               >
-                                <i className="bi bi-wallet-fill me-2"></i>
-                                Claim Funds
+                                {isSubmitting ? (
+                                  <>
+                                    <span className="spinner-border spinner-border-sm me-2"></span>
+                                    Claiming...
+                                  </>
+                                ) : (
+                                  <>
+                                    <i className="bi bi-wallet-fill me-2"></i>
+                                    Claim Funds
+                                  </>
+                                )}
                               </button>
                             ) : (
                               <button

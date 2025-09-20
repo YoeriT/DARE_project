@@ -202,6 +202,52 @@ const CrowdfundingMainPage: React.FC = () => {
     }
   };
 
+  const handleClaimFunds = async () => {
+    if (!selectedCampaign?.contractAddress) {
+      alert("Invalid contract address");
+      return;
+    }
+
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+
+      // Connect to the campaign's smart contract
+      const contract = new ethers.Contract(
+        selectedCampaign.contractAddress,
+        CROWDFUNDING_ABI,
+        signer
+      );
+
+      // Call the claimFunds function on the smart contract
+      const tx = await contract.claimFunds();
+
+      console.log("Claim funds transaction sent:", tx.hash);
+
+      // Wait for transaction confirmation
+      await tx.wait();
+
+      console.log("Funds claimed successfully!");
+
+      // Refresh campaign data and user balance
+      await refreshCampaignData();
+      await getBalance(walletAddress);
+
+      alert("Funds claimed successfully!");
+    } catch (error: any) {
+      console.error("Claim failed:", error);
+      if (error.code === 4001) {
+        alert("Transaction rejected by user");
+      } else if (error.message.includes("funding goal not met")) {
+        alert("Cannot claim funds: Goal not reached yet");
+      } else if (error.message.includes("not the owner")) {
+        alert("Only the campaign owner can claim funds");
+      } else {
+        alert("Claim failed");
+      }
+    }
+  };
+
   const refreshCampaignData = async () => {
     if (!selectedCampaign?.contractAddress) return;
 
@@ -386,6 +432,7 @@ const CrowdfundingMainPage: React.FC = () => {
             campaign={selectedCampaign}
             onBack={handleBackToCampaigns}
             onDonate={(amount) => handleDonate(amount)}
+            onClaimFunds={handleClaimFunds}
             walletConnected={walletConnected}
             isOwner={walletAddress === selectedCampaign.creator}
           />
