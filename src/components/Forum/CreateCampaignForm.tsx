@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { ethers } from "ethers";
 import CrowdFundingArtifact from "../../../blockchain/artifacts/contracts/CrowdFunding.sol/Crowdfunding.json";
+import { supabase } from "../utils/supabase";
 
 interface Campaign {
   title: string;
@@ -101,7 +102,6 @@ const CreateCampaignForm: React.FC<CreateCampaignFormProps> = ({
 
       console.log("Contract deployed at:", contractAddress);
 
-      // Submit the campaign data including the contract address
       onSubmit({
         title: formData.title,
         description: formData.description,
@@ -112,6 +112,26 @@ const CreateCampaignForm: React.FC<CreateCampaignFormProps> = ({
         creator: walletAddress,
         contractAddress: contractAddress,
       });
+
+      // Submit the campaign data including the contract address
+      const { error } = await supabase.from("campaigns").insert([
+        {
+          title: formData.title,
+          description: formData.description,
+          category: formData.category,
+          image_url: formData.image,
+          goal_eth: parseFloat(formData.goal),
+          duration_days: daysAsNumber,
+          contract_address: contractAddress,
+          creator_address: walletAddress,
+        },
+      ]);
+
+      if (error) {
+        console.error("Error saving campaign:", error);
+      } else {
+        console.log("Campaign saved to database");
+      }
 
       // Reset form after successful deployment
       setFormData({

@@ -7,6 +7,7 @@ import CreateCampaignForm from "../Forum/CreateCampaignForm";
 import CampaignDetail from "../Campaign/CampaignDetail";
 import { formatAddress, calculateProgress } from "../utils/helperFunctions";
 import CrowdFundingArtifact from "../../../blockchain/artifacts/contracts/CrowdFunding.sol/Crowdfunding.json";
+import { supabase } from "../utils/supabase";
 
 //ABI from the compiled contract
 const CROWDFUNDING_ABI = CrowdFundingArtifact.abi;
@@ -25,62 +26,6 @@ interface Campaign {
   contractAddress?: string;
 }
 
-//campaigns
-const mockCampaigns: Campaign[] = [
-  {
-    id: 1,
-    title: "Sustainable Ocean Cleanup Device",
-    description:
-      "Revolutionary device to remove plastic waste from our oceans using solar power and AI navigation.",
-    goal: 50,
-    raised: 32.5,
-    daysLeft: 15,
-    category: "Environment",
-    image:
-      "https://images.unsplash.com/photo-1583212292454-1fe6229603b7?w=400&h=250&fit=crop",
-    creator: "0x1234...5678",
-  },
-  {
-    id: 2,
-    title: "Decentralized Learning Platform",
-    description:
-      "Building a blockchain-based platform for peer-to-peer education and skill sharing.",
-    goal: 25,
-    raised: 18.7,
-    daysLeft: 8,
-    category: "Education",
-    image:
-      "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=400&h=250&fit=crop",
-    creator: "0xabcd...efgh",
-  },
-  {
-    id: 3,
-    title: "Smart Urban Farming System",
-    description:
-      "IoT-enabled vertical farming solution for urban communities to grow fresh produce locally.",
-    goal: 75,
-    raised: 41.2,
-    daysLeft: 22,
-    category: "Technology",
-    image:
-      "https://images.unsplash.com/photo-1574943320219-553eb213f72d?w=400&h=250&fit=crop",
-    creator: "0x9876...5432",
-  },
-  {
-    id: 4,
-    title: "Open Source Medical Research",
-    description:
-      "Funding transparent medical research for rare diseases with all findings published openly.",
-    goal: 100,
-    raised: 67.8,
-    daysLeft: 12,
-    category: "Health",
-    image:
-      "https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=400&h=250&fit=crop",
-    creator: "0xdef0...1234",
-  },
-];
-
 declare global {
   interface Window {
     ethereum?: any;
@@ -92,7 +37,7 @@ const CrowdfundingMainPage: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [searchTerm, setSearchTerm] = useState("");
   //Campaigns
-  const [campaigns, setCampaigns] = useState<Campaign[]>(mockCampaigns);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(
     null
@@ -123,18 +68,54 @@ const CrowdfundingMainPage: React.FC = () => {
     "Social",
   ];
 
+  //Campaign load
+  const loadCampaigns = async () => {
+    const { data, error } = await supabase
+      .from("campaigns")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Error loading campaigns:", error);
+    } else {
+      // Fix: Map the data and ensure 'id' is a number
+      const mappedCampaigns = data.map((campaign) => ({
+        id: Number(campaign.id),
+        title: campaign.title,
+        description: campaign.description,
+        goal: parseFloat(campaign.goal_eth),
+        raised: 0, // Will be updated from blockchain
+        daysLeft: campaign.duration_days,
+        category: campaign.category,
+        image: campaign.image_url,
+        creator: campaign.creator_address,
+        contractAddress: campaign.contract_address,
+      }));
+      setCampaigns(mappedCampaigns || []);
+    }
+  };
+
+  useEffect(() => {
+    loadCampaigns();
+  }, []);
+
+  useEffect(() => {
+    // Initial load when the component mounts
+    loadCampaigns();
+
+    // Set up an interval to refresh campaigns every 10 seconds
+    const intervalId = setInterval(() => {
+      loadCampaigns();
+    }, 3000); // 10000 milliseconds = 10 seconds
+
+    // Clean up the interval when the component unmounts
+    return () => clearInterval(intervalId);
+  }, []);
+
   //Campaign creation
 
-  const handleCreateCampaign = (
-    newCampaign: Omit<Campaign, "id" | "raised">
-  ) => {
-    const campaign: Campaign = {
-      ...newCampaign,
-      id: campaigns.length + 1,
-      raised: 0, // New campaigns start with 0 funding
-    };
-
-    setCampaigns([campaign, ...campaigns]); // Add to beginning of list
+  const handleCreateCampaign = () => {
+    loadCampaigns();
     setShowCreateForm(false);
     alert("Campaign created successfully!");
   };
