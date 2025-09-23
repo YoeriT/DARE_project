@@ -6,6 +6,8 @@ contract Crowdfunding {
     uint256 public goal; // funding goal in ether
     mapping (address => uint256) public backers; // the share of each backer
 
+    event Fund(address indexed donator, uint256 amount);
+
     constructor(uint256 numberOfDays, uint256 _goal) {	
         owner = msg.sender;	
         deadline = block.timestamp + (numberOfDays * 1 days);	
@@ -15,6 +17,7 @@ contract Crowdfunding {
     function donate() public payable {	
         require(block.timestamp < deadline); // before the fundraising deadline
         backers[msg.sender] += msg.value;
+        emit Fund(msg.sender, msg.value);
     }
 
     function claimFunds() public {	
