@@ -24,6 +24,13 @@ interface Campaign {
   image: string;
   creator: string;
   contractAddress?: string;
+  backers: number;
+}
+
+interface PlatformStats {
+  totalProjects: number;
+  totalRaisedETH: number;
+  successRate: number;
 }
 
 declare global {
@@ -33,11 +40,18 @@ declare global {
 }
 
 const CrowdfundingMainPage: React.FC = () => {
+  //Status
+  const [platformStats, setPlatformStats] = useState<PlatformStats>({
+    totalProjects: 0,
+    totalRaisedETH: 0,
+    successRate: 0,
+  });
   //Filters and Search
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [searchTerm, setSearchTerm] = useState("");
   //Campaigns
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [eventListeners, setEventListeners] = useState<any[]>([]);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(
     null
@@ -52,14 +66,56 @@ const CrowdfundingMainPage: React.FC = () => {
     const matchesSearch =
       campaign.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       campaign.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory =
-      selectedCategory === "All" || campaign.category === selectedCategory;
+
+    const matchesCategory = (() => {
+      if (selectedCategory === "All") return true;
+      if (selectedCategory === "My Campaigns") {
+        // Show only campaigns created by the connected wallet
+        return (
+          walletConnected &&
+          campaign.creator.toLowerCase() === walletAddress.toLowerCase()
+        );
+      }
+      return campaign.category === selectedCategory;
+    })();
+
     return matchesSearch && matchesCategory;
   });
+
+  //Status
+
+  const calculatePlatformStats = (campaigns: Campaign[]): PlatformStats => {
+    if (campaigns.length === 0) {
+      return {
+        totalProjects: 0,
+        totalRaisedETH: 0,
+        successRate: 0,
+      };
+    }
+
+    const totalProjects = campaigns.length;
+    const totalRaisedETH = campaigns.reduce(
+      (sum, campaign) => sum + campaign.raised,
+      0
+    );
+
+    // Calculate success rate (campaigns that reached their goal)
+    const successfulCampaigns = campaigns.filter(
+      (campaign) => campaign.raised >= campaign.goal
+    ).length;
+    const successRate = (successfulCampaigns / totalProjects) * 100;
+
+    return {
+      totalProjects,
+      totalRaisedETH: Math.round(totalRaisedETH * 1000) / 1000, // Round to 3 decimals
+      successRate: Math.round(successRate * 10) / 10, // Round to 1 decimal
+    };
+  };
 
   //Categories for filtering
   const categories = [
     "All",
+    "My Campaigns",
     "Environment",
     "Education",
     "Technology",
@@ -77,39 +133,207 @@ const CrowdfundingMainPage: React.FC = () => {
 
     if (error) {
       console.error("Error loading campaigns:", error);
-    } else {
-      // Fix: Map the data and ensure 'id' is a number
-      const mappedCampaigns = data.map((campaign) => ({
-        id: Number(campaign.id),
-        title: campaign.title,
-        description: campaign.description,
-        goal: parseFloat(campaign.goal_eth),
-        raised: 0, // Will be updated from blockchain
-        daysLeft: campaign.duration_days,
-        category: campaign.category,
-        image: campaign.image_url,
-        creator: campaign.creator_address,
-        contractAddress: campaign.contract_address,
-      }));
-      setCampaigns(mappedCampaigns || []);
+      return;
     }
+
+    // Map metadata and fetch blockchain data
+    const mappedCampaigns = await Promise.all(
+      (data || []).map(async (campaign) => {
+        try {
+          // Create provider (make sure window.ethereum is available)
+          if (!window.ethereum) {
+            console.warn("No ethereum provider found, using database values");
+            return {
+              id: Number(campaign.id),
+              title: campaign.title,
+              description: campaign.description,
+              goal: parseFloat(campaign.goal_eth || "0"),
+              raised: 0, // Default to 0 if no provider
+              daysLeft: campaign.duration_days || 0,
+              category: campaign.category,
+              image: campaign.image_url,
+              creator: campaign.creator_address,
+              contractAddress: campaign.contract_address,
+              backers: 0,
+            };
+          }
+
+          const provider = new ethers.BrowserProvider(window.ethereum);
+
+          // Connect to the contract
+          const contract = new ethers.Contract(
+            campaign.contract_address,
+            CROWDFUNDING_ABI, // Use the imported ABI
+            provider
+          );
+
+          // Get on-chain values
+          const goal = await contract.goal();
+          const deadline = await contract.deadline();
+          const owner = await contract.owner();
+
+          // Get contract balance (raised amount)
+          const contractBalance = await provider.getBalance(
+            campaign.contract_address
+          );
+
+          // Get number of backers
+          const backersCount = await contract.totalBackers();
+          console.log("Backers count from contract:", backersCount);
+
+          // Calculate days left from blockchain deadline
+          const currentTime = Math.floor(Date.now() / 1000);
+          const daysLeft = Math.max(
+            0,
+            Math.ceil((Number(deadline) - currentTime) / (24 * 60 * 60))
+          );
+
+          return {
+            id: Number(campaign.id),
+            title: campaign.title,
+            description: campaign.description,
+            goal: parseFloat(ethers.formatEther(goal)), // Goal from blockchain
+            raised: parseFloat(ethers.formatEther(contractBalance)), // Raised amount from contract balance
+            daysLeft, // Days left calculated from blockchain deadline
+            category: campaign.category,
+            image: campaign.image_url,
+            creator: campaign.creator_address, // Owner address from database
+            contractAddress: campaign.contract_address,
+            backers: backersCount, // Number of unique backers from events
+          };
+        } catch (err) {
+          console.error(
+            `Error loading campaign ${campaign.id} from blockchain`
+          );
+          // Return campaign with database values as fallback
+          return {
+            id: Number(campaign.id),
+            title: campaign.title,
+            description: campaign.description,
+            goal: parseFloat(campaign.goal_eth || "0"),
+            raised: 0, // Default to 0 on error
+            daysLeft: campaign.duration_days || 0,
+            category: campaign.category,
+            image: campaign.image_url,
+            creator: campaign.creator_address,
+            contractAddress: campaign.contract_address,
+            backers: 0,
+          };
+        }
+      })
+    );
+
+    // Filter out null values and set campaigns
+    setCampaigns(mappedCampaigns.filter(Boolean));
+    const stats = calculatePlatformStats(mappedCampaigns);
+    setPlatformStats(stats);
   };
 
+  // Event listeners for blockchain events
   useEffect(() => {
-    loadCampaigns();
-  }, []);
+    const setupAllEventListeners = async () => {
+      if (!campaigns.length || !walletConnected || !window.ethereum) return;
+
+      try {
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const newListeners: any[] = [];
+
+        for (const campaign of campaigns) {
+          if (!campaign.contractAddress) continue;
+
+          const contract = new ethers.Contract(
+            campaign.contractAddress,
+            CROWDFUNDING_ABI,
+            provider
+          );
+
+          // Fund event listener
+          const handleFundEvent = () => {
+            loadCampaigns(); // Refresh campaigns
+          };
+
+          // FundsClaimed event listener
+          const handleClaimEvent = (amount: bigint) => {
+            console.log(
+              `Funds claimed: ${ethers.formatEther(amount)} ETH from ${
+                campaign.title
+              }`
+            );
+          };
+
+          // RefundIssued event listener
+          const handleRefundEvent = (amount: bigint) => {
+            console.log(
+              `Refund issued: ${ethers.formatEther(amount)} ETH from ${
+                campaign.title
+              }`
+            );
+          };
+
+          // Add all listeners
+          contract.on("Fund", handleFundEvent);
+          contract.on("FundsClaimed", handleClaimEvent);
+          contract.on("RefundIssued", handleRefundEvent);
+
+          newListeners.push({
+            contract,
+            handlers: {
+              Fund: handleFundEvent,
+              FundsClaimed: handleClaimEvent,
+              RefundIssued: handleRefundEvent,
+            },
+          });
+        }
+
+        setEventListeners(newListeners);
+      } catch (error) {
+        console.error("Error setting up event listeners:", error);
+      }
+    };
+
+    // Cleanup function for multiple event types
+    const cleanupAllListeners = () => {
+      eventListeners.forEach(({ contract, handlers }) => {
+        Object.entries(handlers).forEach(
+          ([eventName, handler]: [string, any]) => {
+            try {
+              contract.off(eventName, handler);
+            } catch (error) {
+              console.error(`Error removing ${eventName} listener:`, error);
+            }
+          }
+        );
+      });
+      setEventListeners([]);
+    };
+
+    cleanupAllListeners();
+    setupAllEventListeners();
+
+    return cleanupAllListeners;
+  }, [campaigns, walletConnected]);
 
   useEffect(() => {
-    // Initial load when the component mounts
+    // 1. Initial load
     loadCampaigns();
 
-    // Set up an interval to refresh campaigns every 10 seconds
-    const intervalId = setInterval(() => {
-      loadCampaigns();
-    }, 3000); // 10000 milliseconds = 10 seconds
+    // 2. Subscribe to realtime changes in Supabase
+    const channel = supabase
+      .channel("campaigns-changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "campaigns" },
+        (payload) => {
+          console.log("Change received!", payload);
+          loadCampaigns(); // Refresh campaigns when someone adds/updates/deletes
+        }
+      )
+      .subscribe();
 
-    // Clean up the interval when the component unmounts
-    return () => clearInterval(intervalId);
+    // 3. Clean up on unmount
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   //Campaign creation
@@ -135,8 +359,10 @@ const CrowdfundingMainPage: React.FC = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const handleBackToCampaigns = () => {
+  const handleBackToCampaigns = async () => {
     setSelectedCampaign(null);
+    await loadCampaigns();
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleDonate = async (amount?: number) => {
@@ -246,10 +472,19 @@ const CrowdfundingMainPage: React.FC = () => {
       );
       const raisedAmount = parseFloat(ethers.formatEther(contractBalance));
 
+      // Get deadline from contract
+      const deadline = await contract.deadline();
+      const currentTime = Math.floor(Date.now() / 1000);
+      const daysLeft = Math.max(
+        0,
+        Math.ceil((Number(deadline) - currentTime) / (24 * 60 * 60))
+      );
+
       // Update the selected campaign data
       const updatedCampaign = {
         ...selectedCampaign,
         raised: raisedAmount,
+        daysLeft: daysLeft,
       };
 
       setSelectedCampaign(updatedCampaign);
@@ -385,12 +620,7 @@ const CrowdfundingMainPage: React.FC = () => {
   //check for balance updates
   useEffect(() => {
     if (!walletConnected || !walletAddress) return;
-
-    const interval = setInterval(() => {
-      getBalance(walletAddress);
-    }, 3000);
-
-    return () => clearInterval(interval);
+    getBalance(walletAddress);
   }, [walletConnected, walletAddress]);
 
   return (
@@ -448,15 +678,23 @@ const CrowdfundingMainPage: React.FC = () => {
                     <h3 className="mb-3">Platform Stats</h3>
                     <div className="row">
                       <div className="col-4">
-                        <h4 className="text-warning">1,234</h4>
+                        <h4 className="text-warning">
+                          {" "}
+                          {platformStats.totalProjects.toLocaleString()}
+                        </h4>
                         <small>Projects Funded</small>
                       </div>
                       <div className="col-4">
-                        <h4 className="text-warning">5,678 ETH</h4>
+                        <h4 className="text-warning">
+                          {" "}
+                          {platformStats.totalRaisedETH.toLocaleString()} ETH
+                        </h4>
                         <small>Total Raised</small>
                       </div>
                       <div className="col-4">
-                        <h4 className="text-warning">89%</h4>
+                        <h4 className="text-warning">
+                          {platformStats.successRate}%
+                        </h4>
                         <small>Success Rate</small>
                       </div>
                     </div>
@@ -470,7 +708,7 @@ const CrowdfundingMainPage: React.FC = () => {
           <section className="py-4 bg-white shadow-sm">
             <div className="container">
               <div className="row align-items-center">
-                <div className="col-md-6">
+                <div className="col-md-5">
                   <div className="input-group">
                     <span className="input-group-text">
                       <i className="bi bi-search"></i>
@@ -484,7 +722,7 @@ const CrowdfundingMainPage: React.FC = () => {
                     />
                   </div>
                 </div>
-                <div className="col-md-6">
+                <div className="col-md-7">
                   <div className="d-flex gap-2 flex-wrap justify-content-md-end">
                     {categories.map((category) => (
                       <button
@@ -588,7 +826,11 @@ const CrowdfundingMainPage: React.FC = () => {
 
               {filteredCampaigns.length === 0 && (
                 <div className="text-center py-5">
-                  <h4 className="text-muted">No campaigns found</h4>
+                  <h4 className="text-muted">
+                    {selectedCategory === "My Campaigns"
+                      ? "You haven't created any campaigns yet"
+                      : "No campaigns found"}
+                  </h4>
                   <p className="text-muted">
                     Try adjusting your search or filter criteria
                   </p>

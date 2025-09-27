@@ -16,6 +16,7 @@ interface Campaign {
   image: string;
   creator: string;
   contractAddress?: string;
+  backers: number;
 }
 
 interface CampaignDetailProps {
@@ -308,7 +309,7 @@ const CampaignDetail: React.FC<CampaignDetailProps> = ({
                     <div className="row text-center mb-4">
                       <div className="col-6">
                         <div className="border-end">
-                          <h5 className="mb-1">-</h5>
+                          <h5 className="mb-1">{campaign.backers}</h5>
                           <small className="text-muted">Backers</small>
                         </div>
                       </div>
