@@ -5,7 +5,11 @@ import Navbar from "../NavBar/Navbar";
 import Footer from "../Footer/Footer";
 import CreateCampaignForm from "../Forum/CreateCampaignForm";
 import CampaignDetail from "../Campaign/CampaignDetail";
-import { formatAddress, calculateProgress } from "../utils/helperFunctions";
+import {
+  formatAddress,
+  calculateProgress,
+  formatTimeLeft,
+} from "../utils/helperFunctions";
 import CrowdFundingArtifact from "../../../blockchain/artifacts/contracts/CrowdFunding.sol/Crowdfunding.json";
 import { supabase } from "../utils/supabase";
 
@@ -20,6 +24,7 @@ interface Campaign {
   goal: number;
   raised: number;
   daysLeft: number;
+  timeLeft?: string;
   category: string;
   image: string;
   creator: string;
@@ -170,7 +175,6 @@ const CrowdfundingMainPage: React.FC = () => {
           // Get on-chain values
           const goal = await contract.goal();
           const deadline = await contract.deadline();
-          const owner = await contract.owner();
 
           // Get contract balance (raised amount)
           const contractBalance = await provider.getBalance(
@@ -187,6 +191,7 @@ const CrowdfundingMainPage: React.FC = () => {
             0,
             Math.ceil((Number(deadline) - currentTime) / (24 * 60 * 60))
           );
+          const timeLeft = formatTimeLeft(deadline);
 
           return {
             id: Number(campaign.id),
@@ -195,6 +200,7 @@ const CrowdfundingMainPage: React.FC = () => {
             goal: parseFloat(ethers.formatEther(goal)), // Goal from blockchain
             raised: parseFloat(ethers.formatEther(contractBalance)), // Raised amount from contract balance
             daysLeft, // Days left calculated from blockchain deadline
+            timeLeft,
             category: campaign.category,
             image: campaign.image_url,
             creator: campaign.creator_address, // Owner address from database
@@ -259,6 +265,7 @@ const CrowdfundingMainPage: React.FC = () => {
                 campaign.title
               }`
             );
+            loadCampaigns();
           };
 
           // RefundIssued event listener
@@ -314,10 +321,10 @@ const CrowdfundingMainPage: React.FC = () => {
   }, [campaigns, walletConnected]);
 
   useEffect(() => {
-    // 1. Initial load
+    // Initial load
     loadCampaigns();
 
-    // 2. Subscribe to realtime changes in Supabase
+    // Subscribe to realtime changes in Supabase
     const channel = supabase
       .channel("campaigns-changes")
       .on(
@@ -330,7 +337,7 @@ const CrowdfundingMainPage: React.FC = () => {
       )
       .subscribe();
 
-    // 3. Clean up on unmount
+    // Clean up on unmount
     return () => {
       supabase.removeChannel(channel);
     };
@@ -436,6 +443,10 @@ const CrowdfundingMainPage: React.FC = () => {
 
       console.log("Funds claimed successfully!");
 
+      await supabase.from("campaigns").delete().eq("id", selectedCampaign.id);
+      // Go back to campaigns list
+      setSelectedCampaign(null);
+
       // Refresh campaign data and user balance
       await refreshCampaignData();
       await getBalance(walletAddress);
@@ -451,6 +462,54 @@ const CrowdfundingMainPage: React.FC = () => {
         alert("Only the campaign owner can claim funds");
       } else {
         alert("Claim failed");
+      }
+    }
+  };
+
+  const handleRefund = async () => {
+    if (!selectedCampaign?.contractAddress) {
+      alert("Invalid contract address");
+      return;
+    }
+
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+
+      // Connect to the campaign's smart contract
+      const contract = new ethers.Contract(
+        selectedCampaign.contractAddress,
+        CROWDFUNDING_ABI,
+        signer
+      );
+
+      // Call the refund function on the smart contract
+      const tx = await contract.refund();
+
+      console.log("Refund transaction sent:", tx.hash);
+
+      // Wait for transaction confirmation
+      await tx.wait();
+
+      console.log("Refund processed successfully!");
+
+      // Refresh campaign data and user balance
+      await refreshCampaignData();
+      await getBalance(walletAddress);
+
+      alert("Refund processed successfully!");
+    } catch (error: any) {
+      console.error("Refund failed:", error);
+      if (error.code === 4001) {
+        alert("Transaction rejected by user");
+      } else if (error.message.includes("deadline not passed")) {
+        alert("Cannot refund: Campaign is still active");
+      } else if (error.message.includes("goal was met")) {
+        alert("Cannot refund: Campaign goal was reached");
+      } else if (error.message.includes("no contribution")) {
+        alert("You haven't contributed to this campaign");
+      } else {
+        alert("Refund failed");
       }
     }
   };
@@ -479,12 +538,14 @@ const CrowdfundingMainPage: React.FC = () => {
         0,
         Math.ceil((Number(deadline) - currentTime) / (24 * 60 * 60))
       );
+      const timeLeft = formatTimeLeft(deadline); // Add this
 
       // Update the selected campaign data
       const updatedCampaign = {
         ...selectedCampaign,
         raised: raisedAmount,
         daysLeft: daysLeft,
+        timeLeft: timeLeft,
       };
 
       setSelectedCampaign(updatedCampaign);
@@ -644,6 +705,7 @@ const CrowdfundingMainPage: React.FC = () => {
             onBack={handleBackToCampaigns}
             onDonate={(amount) => handleDonate(amount)}
             onClaimFunds={handleClaimFunds}
+            onRefund={handleRefund}
             walletConnected={walletConnected}
             isOwner={walletAddress === selectedCampaign.creator}
           />
@@ -771,7 +833,8 @@ const CrowdfundingMainPage: React.FC = () => {
                             {campaign.category}
                           </span>
                           <small className="text-muted">
-                            {campaign.daysLeft} days left
+                            {campaign.timeLeft || `${campaign.daysLeft} days`}{" "}
+                            left
                           </small>
                         </div>
 

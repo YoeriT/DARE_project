@@ -115,5 +115,197 @@ describe("Crowdfunding", async function () {
       /revert/
     );
   });
+
+
+  //Tests for claimFunds function
+  it("Should allow owner to claim funds when goal is met and deadline passed", async function () {
+    const [owner, donor1, donor2] = await viem.getWalletClients();
+    const crowdfunding = await viem.deployContract("Crowdfunding", [1n, 1000n]); // 1 day, 1000 wei goal
+    
+    // Get initial owner balance
+    const initialOwnerBalance = await publicClient.getBalance({ address: owner.account.address });
+    
+    // Make donations to meet the goal
+    await crowdfunding.write.donate({ value: 600n, account: donor1.account });
+    await crowdfunding.write.donate({ value: 500n, account: donor2.account });
+    
+    // Fast forward past deadline
+    await networkHelpers.time.increase(86401); // 1 day + 1 second
+
+    const balanceBefore = await publicClient.getBalance({ address: owner.account.address });
+    
+    // Check that FundsClaimed event was emitted
+    await viem.assertions.emitWithArgs(
+      crowdfunding.write.claimFunds({ account: owner.account }),
+      crowdfunding,
+      "FundsClaimed",
+      [getAddress(owner.account.address), 1100n]
+    );
+
+    const contractBalance = await publicClient.getBalance({ 
+      address: crowdfunding.address 
+    });
+    assert.equal(contractBalance, 0n, "Contract should be empty");
+
+  });
+
+  it("Should revert when non-owner tries to claim funds", async function () {
+    const [owner, donor, nonOwner] = await viem.getWalletClients();
+    const crowdfunding = await viem.deployContract("Crowdfunding", [1n, 1000n]);
+    
+    // Make donation to meet goal
+    await crowdfunding.write.donate({ value: 1200n, account: donor.account });
+    
+    // Fast forward past deadline
+    await networkHelpers.time.increase(86401);
+    
+    // Non-owner should not be able to claim
+    await assert.rejects(
+      crowdfunding.write.claimFunds({ account: nonOwner.account }),
+      /revert/
+    );
+  });
+
+  it("Should revert when trying to claim funds before deadline", async function () {
+    const [owner, donor] = await viem.getWalletClients();
+    const crowdfunding = await viem.deployContract("Crowdfunding", [1n, 1000n]);
+    
+    // Make donation to meet goal
+    await crowdfunding.write.donate({ value: 1200n, account: donor.account });
+    
+    // Try to claim before deadline (should fail)
+    await assert.rejects(
+      crowdfunding.write.claimFunds({ account: owner.account }),
+      /revert/
+    );
+  });
+
+  it("Should revert when trying to claim funds without meeting goal", async function () {
+    const [owner, donor] = await viem.getWalletClients();
+    const crowdfunding = await viem.deployContract("Crowdfunding", [1n, 1000n]);
+    
+    // Make donation below goal
+    await crowdfunding.write.donate({ value: 500n, account: donor.account });
+    
+    // Fast forward past deadline
+    await networkHelpers.time.increase(86401);
+    
+    // Should not be able to claim (goal not met)
+    await assert.rejects(
+      crowdfunding.write.claimFunds({ account: owner.account }),
+      /revert/
+    );
+  });
+
+  //Tests for getRefund function
+  it("Should allow backer to get refund when goal not met and deadline passed", async function () {
+    const [owner, donor1, donor2] = await viem.getWalletClients();
+    const crowdfunding = await viem.deployContract("Crowdfunding", [1n, 2000n]); // Higher goal that won't be met
+    
+    const donerAddress = getAddress(donor1.account.address);
+    // Get initial donor balance
+    const initialDonor1Balance = await publicClient.getBalance({ address: donerAddress });
+    
+    // Make donations that don't meet the goal
+    await crowdfunding.write.donate({ value: 400n, account: donor1.account });
+    await crowdfunding.write.donate({ value: 300n, account: donor2.account });
+    
+    // Fast forward past deadline
+    await networkHelpers.time.increase(86401);
+    
+    
+    // Check that RefundIssued event was emitted
+    await viem.assertions.emitWithArgs(
+      crowdfunding.write.getRefund({ account: donor1.account }),
+      crowdfunding,
+      "RefundIssued",
+      [donerAddress, 400n]
+    );
+    
+    // Check that backer balance is reset to 0
+    const backerBalance = await crowdfunding.read.backers([donor1.account.address]);
+    assert.equal(backerBalance, 0n);
+    
+    // Check that contract balance decreased
+    const contractBalance = await publicClient.getBalance({ address: crowdfunding.address });
+    assert.equal(contractBalance, 300n); // Only donor2's contribution remains
+  });
+
+  it("Should handle multiple donations from same donor in refund", async function () {
+    const [owner, donor] = await viem.getWalletClients();
+    const crowdfunding = await viem.deployContract("Crowdfunding", [1n, 5000n]); // High goal
+    const donerAddress = getAddress(donor.account.address);
+
+    // Multiple donations from same donor
+    await crowdfunding.write.donate({ value: 500n, account: donor.account });
+    await crowdfunding.write.donate({ value: 300n, account: donor.account });
+    await crowdfunding.write.donate({ value: 200n, account: donor.account });
+    
+    // Fast forward past deadline
+    await networkHelpers.time.increase(86401);
+    
+    
+    await viem.assertions.emitWithArgs(
+      crowdfunding.write.getRefund({ account: donor.account }),
+      crowdfunding,
+      "RefundIssued",
+      [donerAddress, 1000n] // Total of all donations
+    );
+    
+    // Backer balance should be 0
+    const backerBalance = await crowdfunding.read.backers([donerAddress]);
+    assert.equal(backerBalance, 0n);
+  });
+
+  it("Should revert when trying to get refund before deadline", async function () {
+    const [owner, donor] = await viem.getWalletClients();
+    const crowdfunding = await viem.deployContract("Crowdfunding", [1n, 2000n]);
+    
+    // Make donation
+    await crowdfunding.write.donate({ value: 500n, account: donor.account });
+    
+    // Try to get refund before deadline (should fail)
+    await assert.rejects(
+      crowdfunding.write.getRefund({ account: donor.account }),
+      /revert/
+    );
+  });
+
+  it("Should revert when trying to get refund after goal is met", async function () {
+    const [owner, donor1, donor2] = await viem.getWalletClients();
+    const crowdfunding = await viem.deployContract("Crowdfunding", [1n, 1000n]);
+    
+    // Make donations to meet goal
+    await crowdfunding.write.donate({ value: 600n, account: donor1.account });
+    await crowdfunding.write.donate({ value: 500n, account: donor2.account });
+    
+    // Fast forward past deadline
+    await networkHelpers.time.increase(86401);
+    
+    // Should not be able to get refund (goal was met)
+    await assert.rejects(
+      crowdfunding.write.getRefund({ account: donor1.account }),
+      /revert/
+    );
+  });
+
+  //Edge case tests
+  it("Should handle exact goal amount", async function () {
+    const [owner, donor] = await viem.getWalletClients();
+    const crowdfunding = await viem.deployContract("Crowdfunding", [1n, 1000n]);
+    
+    // Donate exactly the goal amount
+    await crowdfunding.write.donate({ value: 1000n, account: donor.account });
+    
+    // Fast forward past deadline
+    await networkHelpers.time.increase(86401);
+    
+    // Owner should be able to claim (goal exactly met)
+    await crowdfunding.write.claimFunds({ account: owner.account });
+    
+    // Contract should have 0 balance
+    const contractBalance = await publicClient.getBalance({ address: crowdfunding.address });
+    assert.equal(contractBalance, 0n);
+  });
   
 });

@@ -26,8 +26,10 @@ contract Crowdfunding {
 
     function donate() public payable {
         require(block.timestamp < deadline); // before the fundraising deadline
+        if (backers[msg.sender] == 0) {
+            totalBackers += 1;
+        }
         backers[msg.sender] += msg.value;
-        totalBackers += 1;
         emit Fund(msg.sender, msg.value);
     }
 
@@ -35,15 +37,20 @@ contract Crowdfunding {
         require(address(this).balance >= goal); // funding goal met
         require(block.timestamp >= deadline); // after the withdrawal period
         require(msg.sender == owner);
-        payable(msg.sender).transfer(address(this).balance);
-        emit FundsClaimed(msg.sender, address(this).balance);
+
+        uint256 amount = address(this).balance;
+
+        payable(msg.sender).transfer(amount);
+        emit FundsClaimed(msg.sender, amount);
     }
 
     function getRefund() public {
         require(address(this).balance < goal); // campaign failed: goal not met
         require(block.timestamp >= deadline); // in the withdrawal period
+
         uint256 donation = backers[msg.sender];
         backers[msg.sender] = 0;
+
         payable(msg.sender).transfer(donation);
         emit RefundIssued(msg.sender, donation);
     }

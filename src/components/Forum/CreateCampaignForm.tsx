@@ -48,8 +48,6 @@ const CreateCampaignForm: React.FC<CreateCampaignFormProps> = ({
     "Social",
   ];
 
-  const [isDeploying, setIsDeploying] = useState(false);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -64,8 +62,6 @@ const CreateCampaignForm: React.FC<CreateCampaignFormProps> = ({
     }
 
     try {
-      setIsDeploying(true);
-
       // Check if MetaMask is available
       if (!window.ethereum) {
         alert("Please install MetaMask to create a campaign!");
@@ -154,8 +150,6 @@ const CreateCampaignForm: React.FC<CreateCampaignFormProps> = ({
       } else {
         alert("Failed to deploy contract");
       }
-    } finally {
-      setIsDeploying(false);
     }
   };
 

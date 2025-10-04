@@ -12,6 +12,7 @@ interface Campaign {
   goal: number;
   raised: number;
   daysLeft: number;
+  timeLeft?: string;
   category: string;
   image: string;
   creator: string;
@@ -24,6 +25,7 @@ interface CampaignDetailProps {
   onBack: () => void;
   onDonate: (amount: number) => Promise<void>;
   onClaimFunds: () => Promise<void>;
+  onRefund: () => Promise<void>;
   walletConnected: boolean;
   isOwner: boolean;
 }
@@ -33,6 +35,7 @@ const CampaignDetail: React.FC<CampaignDetailProps> = ({
   onBack,
   onDonate,
   onClaimFunds,
+  onRefund,
   walletConnected,
   isOwner,
 }) => {
@@ -50,6 +53,17 @@ const CampaignDetail: React.FC<CampaignDetailProps> = ({
     } else {
       // Regular user donating
       setShowDonationForm(true);
+    }
+  };
+
+  const handleRefundClick = async () => {
+    setIsSubmitting(true);
+    try {
+      await onRefund();
+    } catch (error) {
+      console.error("Refund failed:", error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -155,7 +169,7 @@ const CampaignDetail: React.FC<CampaignDetailProps> = ({
                   style={{ fontSize: "0.85rem" }}
                 >
                   <i className="bi bi-clock me-1"></i>
-                  {campaign.daysLeft} days left
+                  {campaign.timeLeft || `${campaign.daysLeft} days`} left
                 </div>
               </div>
             </div>
@@ -314,8 +328,10 @@ const CampaignDetail: React.FC<CampaignDetailProps> = ({
                         </div>
                       </div>
                       <div className="col-6">
-                        <h5 className="mb-1">{campaign.daysLeft}</h5>
-                        <small className="text-muted">Days Left</small>
+                        <h5 className="mb-1">
+                          {campaign.timeLeft || `${campaign.daysLeft} days`}
+                        </h5>
+                        <small className="text-muted">Time Left</small>
                       </div>
                     </div>
 
@@ -342,7 +358,7 @@ const CampaignDetail: React.FC<CampaignDetailProps> = ({
                       )}
                     </div>
 
-                    {/* Donate/Claim Button */}
+                    {/* Donate/Claim/Refund Button */}
                     <div className="d-grid gap-2">
                       {walletConnected ? (
                         <>
@@ -375,28 +391,54 @@ const CampaignDetail: React.FC<CampaignDetailProps> = ({
                                 Goal Not Met - Cannot Claim
                               </button>
                             )
-                          ) : // Regular user view - show fund button
-                          progress >= 100 ? (
-                            <button className="btn btn-success btn-lg" disabled>
-                              <i className="bi bi-check-circle-fill me-2"></i>
-                              Goal Achieved
-                            </button>
-                          ) : campaign.daysLeft <= 0 ? (
-                            <button
-                              className="btn btn-secondary btn-lg"
-                              disabled
-                            >
-                              <i className="bi bi-clock me-2"></i>
-                              Campaign Ended
-                            </button>
                           ) : (
-                            <button
-                              className="btn btn-primary btn-lg"
-                              onClick={handleDonateClick}
-                            >
-                              <i className="bi bi-heart-fill me-2"></i>
-                              Fund This Campaign
-                            </button>
+                            // Regular user view
+                            <>
+                              {campaign.daysLeft <= 0 && progress < 100 ? (
+                                // Campaign failed - show refund button
+                                <button
+                                  className="btn btn-warning btn-lg"
+                                  onClick={handleRefundClick}
+                                  disabled={isSubmitting}
+                                >
+                                  {isSubmitting ? (
+                                    <>
+                                      <span className="spinner-border spinner-border-sm me-2"></span>
+                                      Processing...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <i className="bi bi-arrow-counterclockwise me-2"></i>
+                                      Request Refund
+                                    </>
+                                  )}
+                                </button>
+                              ) : progress >= 100 ? (
+                                <button
+                                  className="btn btn-success btn-lg"
+                                  disabled
+                                >
+                                  <i className="bi bi-check-circle-fill me-2"></i>
+                                  Goal Achieved
+                                </button>
+                              ) : campaign.daysLeft <= 0 ? (
+                                <button
+                                  className="btn btn-secondary btn-lg"
+                                  disabled
+                                >
+                                  <i className="bi bi-clock me-2"></i>
+                                  Campaign Ended
+                                </button>
+                              ) : (
+                                <button
+                                  className="btn btn-primary btn-lg"
+                                  onClick={handleDonateClick}
+                                >
+                                  <i className="bi bi-heart-fill me-2"></i>
+                                  Fund This Campaign
+                                </button>
+                              )}
+                            </>
                           )}
                           <small className="text-muted text-center">
                             Powered by smart contracts on Ethereum
