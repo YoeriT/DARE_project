@@ -410,6 +410,8 @@ const CrowdfundingMainPage: React.FC = () => {
       console.error("Donation failed:", error);
       if (error.code === 4001) {
         alert("Transaction rejected by user");
+      } else if (error.message.includes("campaign ended")) {
+        alert("Campaign ended cannot accept donations");
       } else {
         alert("Donation failed");
       }
@@ -458,6 +460,8 @@ const CrowdfundingMainPage: React.FC = () => {
         alert("Transaction rejected by user");
       } else if (error.message.includes("funding goal not met")) {
         alert("Cannot claim funds: Goal not reached yet");
+      } else if (error.message.includes("deadline not passed")) {
+        alert("Cannot refund: Campaign is still active");
       } else if (error.message.includes("not the owner")) {
         alert("Only the campaign owner can claim funds");
       } else {
@@ -484,7 +488,7 @@ const CrowdfundingMainPage: React.FC = () => {
       );
 
       // Call the refund function on the smart contract
-      const tx = await contract.refund();
+      const tx = await contract.getRefund();
 
       console.log("Refund transaction sent:", tx.hash);
 
@@ -502,12 +506,12 @@ const CrowdfundingMainPage: React.FC = () => {
       console.error("Refund failed:", error);
       if (error.code === 4001) {
         alert("Transaction rejected by user");
+      } else if (error.message.includes("no funds to refund")) {
+        alert("You have no (more) funds to refund from this campaign");
       } else if (error.message.includes("deadline not passed")) {
         alert("Cannot refund: Campaign is still active");
       } else if (error.message.includes("goal was met")) {
         alert("Cannot refund: Campaign goal was reached");
-      } else if (error.message.includes("no contribution")) {
-        alert("You haven't contributed to this campaign");
       } else {
         alert("Refund failed");
       }
