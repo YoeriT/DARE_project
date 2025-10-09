@@ -2,9 +2,9 @@
 pragma solidity ^0.8.28;
 
 contract Crowdfunding {
-    address public owner; // the beneficiary address
-    uint256 public deadline; // campaign deadline in number of days
-    uint256 public goal; // funding goal in ether
+    address public immutable owner; // the beneficiary address
+    uint256 public immutable deadline; // campaign deadline in number of days
+    uint256 public immutable goal; // funding goal in ether
     mapping(address => uint256) public backers; // the share of each backer
     uint256 public totalBackers; // total number of backers
 
@@ -40,8 +40,8 @@ contract Crowdfunding {
 
         uint256 amount = address(this).balance;
 
-        payable(msg.sender).transfer(amount);
         emit FundsClaimed(msg.sender, amount);
+        payable(msg.sender).transfer(amount);
     }
 
     function getRefund() public {
@@ -52,7 +52,7 @@ contract Crowdfunding {
         uint256 donation = backers[msg.sender];
         backers[msg.sender] = 0;
 
-        payable(msg.sender).transfer(donation);
         emit RefundIssued(msg.sender, donation);
+        payable(msg.sender).transfer(donation);
     }
 }
