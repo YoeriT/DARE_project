@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { ethers } from "ethers";
 import "bootstrap/dist/css/bootstrap.min.css";
+import "bootstrap/dist/js/bootstrap.bundle.min.js";
 import Navbar from "../NavBar/Navbar";
 import Footer from "../Footer/Footer";
 import CreateCampaignForm from "../Forum/CreateCampaignForm";
@@ -720,7 +721,7 @@ const CrowdfundingMainPage: React.FC = () => {
           <section className="bg-primary text-white py-5">
             <div className="container">
               <div className="row align-items-center">
-                <div className="col-lg-6">
+                <div className="col-lg-6 mb-3 mb-md-0">
                   <h1 className="display-4 fw-bold mb-4">
                     Crowdfunding for Innovation
                   </h1>
@@ -774,7 +775,7 @@ const CrowdfundingMainPage: React.FC = () => {
           <section className="py-4 bg-white shadow-sm">
             <div className="container">
               <div className="row align-items-center">
-                <div className="col-md-5">
+                <div className="col-md-5 mb-3 mb-md-0">
                   <div className="input-group">
                     <span className="input-group-text">
                       <i className="bi bi-search"></i>
