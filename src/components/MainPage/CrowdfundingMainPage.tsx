@@ -19,7 +19,7 @@ const CROWDFUNDING_ABI = CrowdFundingArtifact.abi;
 
 //  Structure of data for campaigns
 interface Campaign {
-  id: number;
+  id: string;
   title: string;
   description: string;
   goal: number;
@@ -150,7 +150,7 @@ const CrowdfundingMainPage: React.FC = () => {
           if (!window.ethereum) {
             console.warn("No ethereum provider found, using database values");
             return {
-              id: Number(campaign.id),
+              id: campaign.id,
               title: campaign.title,
               description: campaign.description,
               goal: parseFloat(campaign.goal_eth || "0"),
@@ -195,7 +195,7 @@ const CrowdfundingMainPage: React.FC = () => {
           const timeLeft = formatTimeLeft(deadline);
 
           return {
-            id: Number(campaign.id),
+            id: campaign.id,
             title: campaign.title,
             description: campaign.description,
             goal: parseFloat(ethers.formatEther(goal)), // Goal from blockchain
@@ -214,7 +214,7 @@ const CrowdfundingMainPage: React.FC = () => {
           );
           // Return campaign with database values as fallback
           return {
-            id: Number(campaign.id),
+            id: campaign.id,
             title: campaign.title,
             description: campaign.description,
             goal: parseFloat(campaign.goal_eth || "0"),
@@ -451,7 +451,7 @@ const CrowdfundingMainPage: React.FC = () => {
       setSelectedCampaign(null);
 
       // Refresh campaign data and user balance
-      await refreshCampaignData();
+      await loadCampaigns();
       await getBalance(walletAddress);
 
       alert("Funds claimed successfully!");
@@ -498,9 +498,33 @@ const CrowdfundingMainPage: React.FC = () => {
 
       console.log("Refund processed successfully!");
 
-      // Refresh campaign data and user balance
-      await refreshCampaignData();
-      await getBalance(walletAddress);
+      await supabase.from("campaigns").delete().eq("id", selectedCampaign.id);
+
+      // Check if contract is now empty
+      const contractBalanceAfter = await provider.getBalance(
+        selectedCampaign.contractAddress
+      );
+
+      // If balance is 0, this was the last refund - delete campaign
+      if (contractBalanceAfter === 0n) {
+        console.log("Last refund taken, deleting campaign from database");
+
+        await supabase.from("campaigns").delete().eq("id", selectedCampaign.id);
+
+        // Go back to campaigns list
+        setSelectedCampaign(null);
+        await loadCampaigns();
+
+        alert(
+          "Refund processed successfully! Campaign has been removed (all funds refunded)."
+        );
+      } else {
+        // Not the last refund, just refresh data
+        await refreshCampaignData();
+        await getBalance(walletAddress);
+
+        alert("Refund processed successfully!");
+      }
 
       alert("Refund processed successfully!");
     } catch (error: any) {

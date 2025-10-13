@@ -6,7 +6,7 @@ import {
 } from "../utils/helperFunctions";
 
 interface Campaign {
-  id: number;
+  id: string;
   title: string;
   description: string;
   goal: number;

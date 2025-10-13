@@ -203,8 +203,6 @@ describe("Crowdfunding", async function () {
     const crowdfunding = await viem.deployContract("Crowdfunding", [1n, 2000n]); // Higher goal that won't be met
     
     const donerAddress = getAddress(donor1.account.address);
-    // Get initial donor balance
-    const initialDonor1Balance = await publicClient.getBalance({ address: donerAddress });
     
     // Make donations that don't meet the goal
     await crowdfunding.write.donate({ value: 400n, account: donor1.account });
@@ -213,7 +211,6 @@ describe("Crowdfunding", async function () {
     // Fast forward past deadline
     await networkHelpers.time.increase(86401);
     
-    
     // Check that RefundIssued event was emitted
     await viem.assertions.emitWithArgs(
       crowdfunding.write.getRefund({ account: donor1.account }),
@@ -221,7 +218,7 @@ describe("Crowdfunding", async function () {
       "RefundIssued",
       [donerAddress, 400n]
     );
-    
+
     // Check that backer balance is reset to 0
     const backerBalance = await crowdfunding.read.backers([donor1.account.address]);
     assert.equal(backerBalance, 0n);

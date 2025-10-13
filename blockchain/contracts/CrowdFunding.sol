@@ -51,6 +51,7 @@ contract Crowdfunding {
 
         uint256 donation = backers[msg.sender];
         backers[msg.sender] = 0;
+        totalBackers -= 1;
 
         emit RefundIssued(msg.sender, donation);
         payable(msg.sender).transfer(donation);
