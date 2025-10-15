@@ -405,6 +405,7 @@ const CrowdfundingMainPage: React.FC = () => {
 
       // Refresh campaign data after successful donation
       await refreshCampaignData();
+      await getBalance(walletAddress);
 
       alert("Donation successful!");
     } catch (error: any) {
@@ -497,8 +498,6 @@ const CrowdfundingMainPage: React.FC = () => {
       await tx.wait();
 
       console.log("Refund processed successfully!");
-
-      await supabase.from("campaigns").delete().eq("id", selectedCampaign.id);
 
       // Check if contract is now empty
       const contractBalanceAfter = await provider.getBalance(
