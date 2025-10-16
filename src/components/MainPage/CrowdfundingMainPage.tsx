@@ -13,6 +13,8 @@ import {
 } from "../utils/helperFunctions";
 import CrowdFundingArtifact from "../../../blockchain/artifacts/contracts/CrowdFunding.sol/Crowdfunding.json";
 import { supabase } from "../utils/supabase";
+import "react-toastify/dist/ReactToastify.css";
+import { ToastContainer, notify } from "../Toasts/Toasts.tsx";
 
 //ABI from the compiled contract
 const CROWDFUNDING_ABI = CrowdFundingArtifact.abi;
@@ -349,12 +351,12 @@ const CrowdfundingMainPage: React.FC = () => {
   const handleCreateCampaign = () => {
     loadCampaigns();
     setShowCreateForm(false);
-    alert("Campaign created successfully!");
+    notify("Campaign created successfully!", "success");
   };
 
   const handleStartCampaign = () => {
     if (!walletConnected) {
-      alert("Please connect your wallet first to create a campaign");
+      notify("Please connect your wallet first to create a campaign", "error");
       return;
     }
     setShowCreateForm(true);
@@ -375,7 +377,7 @@ const CrowdfundingMainPage: React.FC = () => {
 
   const handleDonate = async (amount?: number) => {
     if (!selectedCampaign?.contractAddress || !amount) {
-      alert("Invalid donation amount or contract address");
+      notify("Invalid donation amount or contract address", "error");
       return;
     }
 
@@ -407,22 +409,22 @@ const CrowdfundingMainPage: React.FC = () => {
       await refreshCampaignData();
       await getBalance(walletAddress);
 
-      alert("Donation successful!");
+      notify("Donation successful!", "success");
     } catch (error: any) {
       console.error("Donation failed:", error);
       if (error.code === 4001) {
-        alert("Transaction rejected by user");
+        notify("Transaction rejected by user", "error");
       } else if (error.message.includes("campaign ended")) {
-        alert("Campaign ended cannot accept donations");
+        notify("Campaign ended cannot accept donations", "error");
       } else {
-        alert("Donation failed");
+        notify("Donation failed", "error");
       }
     }
   };
 
   const handleClaimFunds = async () => {
     if (!selectedCampaign?.contractAddress) {
-      alert("Invalid contract address");
+      notify("Invalid contract address", "error");
       return;
     }
 
@@ -455,26 +457,26 @@ const CrowdfundingMainPage: React.FC = () => {
       await loadCampaigns();
       await getBalance(walletAddress);
 
-      alert("Funds claimed successfully!");
+      notify("Funds claimed successfully!", "success");
     } catch (error: any) {
       console.error("Claim failed:", error);
       if (error.code === 4001) {
-        alert("Transaction rejected by user");
+        notify("Transaction rejected by user", "error");
       } else if (error.message.includes("funding goal not met")) {
-        alert("Cannot claim funds: Goal not reached yet");
+        notify("Cannot claim funds: Goal not reached yet", "error");
       } else if (error.message.includes("deadline not passed")) {
-        alert("Cannot refund: Campaign is still active");
+        notify("Cannot refund: Campaign is still active", "error");
       } else if (error.message.includes("not the owner")) {
-        alert("Only the campaign owner can claim funds");
+        notify("Only the campaign owner can claim funds", "error");
       } else {
-        alert("Claim failed");
+        notify("Claim failed", "error");
       }
     }
   };
 
   const handleRefund = async () => {
     if (!selectedCampaign?.contractAddress) {
-      alert("Invalid contract address");
+      notify("Invalid contract address", "error");
       return;
     }
 
@@ -513,31 +515,28 @@ const CrowdfundingMainPage: React.FC = () => {
         // Go back to campaigns list
         setSelectedCampaign(null);
         await loadCampaigns();
-
-        alert(
-          "Refund processed successfully! Campaign has been removed (all funds refunded)."
-        );
       } else {
         // Not the last refund, just refresh data
         await refreshCampaignData();
         await getBalance(walletAddress);
-
-        alert("Refund processed successfully!");
       }
 
-      alert("Refund processed successfully!");
+      notify("Refund processed successfully!", "success");
     } catch (error: any) {
       console.error("Refund failed:", error);
       if (error.code === 4001) {
-        alert("Transaction rejected by user");
+        notify("Transaction rejected by user", "error");
       } else if (error.message.includes("no funds to refund")) {
-        alert("You have no (more) funds to refund from this campaign");
+        notify(
+          "You have no (more) funds to refund from this campaign",
+          "error"
+        );
       } else if (error.message.includes("deadline not passed")) {
-        alert("Cannot refund: Campaign is still active");
+        notify("Cannot refund: Campaign is still active", "error");
       } else if (error.message.includes("goal was met")) {
-        alert("Cannot refund: Campaign goal was reached");
+        notify("Cannot refund: Campaign goal was reached", "error");
       } else {
-        alert("Refund failed");
+        notify("Refund failed", "error");
       }
     }
   };
@@ -599,8 +598,9 @@ const CrowdfundingMainPage: React.FC = () => {
 
   const connectWallet = async () => {
     if (!isWalletInstalled()) {
-      alert(
-        "Wallet is not installed. Please install (for example) MetaMask to continue."
+      notify(
+        "Wallet is not installed. Please install (for example) MetaMask to continue.",
+        "error"
       );
       window.open("https://metamask.io/download/", "_blank");
       return;
@@ -625,9 +625,9 @@ const CrowdfundingMainPage: React.FC = () => {
     } catch (error: any) {
       console.error("Failed to connect wallet:", error);
       if (error.code === 4001) {
-        alert("Please connect to wallet to continue.");
+        notify("Please connect to wallet to continue.", "error");
       } else {
-        alert("Failed to connect wallet. Please try again.");
+        notify("Failed to connect wallet. Please try again.", "error");
       }
     }
   };
@@ -714,6 +714,7 @@ const CrowdfundingMainPage: React.FC = () => {
 
   return (
     <div className="min-vh-100 bg-light">
+      <ToastContainer position="top-right" autoClose={5000} />
       <Navbar
         walletConnected={walletConnected}
         walletAddress={walletAddress}
