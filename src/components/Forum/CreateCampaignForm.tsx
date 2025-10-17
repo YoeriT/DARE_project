@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { ethers } from "ethers";
 import CrowdFundingArtifact from "../../../blockchain/artifacts/contracts/CrowdFunding.sol/Crowdfunding.json";
 import { supabase } from "../utils/supabase";
+import { notify } from "../Toasts/Toasts";
 
 interface Campaign {
   title: string;
@@ -57,14 +58,14 @@ const CreateCampaignForm: React.FC<CreateCampaignFormProps> = ({
       !formData.goal ||
       !formData.daysLeft
     ) {
-      alert("Please fill in all fields");
+      notify("Please fill in all fields", "warning");
       return;
     }
 
     try {
       // Check if MetaMask is available
       if (!window.ethereum) {
-        alert("Please install MetaMask to create a campaign!");
+        notify("Please install MetaMask to create a campaign!", "error");
         return;
       }
 
@@ -144,11 +145,11 @@ const CreateCampaignForm: React.FC<CreateCampaignFormProps> = ({
 
       // Handle different types of errors
       if (error.code === 4001) {
-        alert("Transaction rejected by user");
+        notify("Transaction rejected by user", "error");
       } else if (error.message.includes("insufficient funds")) {
-        alert("Insufficient funds to deploy contract");
+        notify("Insufficient funds to deploy contract", "error");
       } else {
-        alert("Failed to deploy contract");
+        notify("Failed to deploy contract", "error");
       }
     }
   };

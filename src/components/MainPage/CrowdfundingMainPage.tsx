@@ -4,6 +4,8 @@ import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap/dist/js/bootstrap.bundle.min.js";
 import Navbar from "../NavBar/Navbar";
 import Footer from "../Footer/Footer";
+import HowItWorksPage from "../HowItWorks/HowItWorks.tsx";
+import AboutPage from "../About/About.tsx";
 import CreateCampaignForm from "../Forum/CreateCampaignForm";
 import CampaignDetail from "../Campaign/CampaignDetail";
 import {
@@ -47,7 +49,24 @@ declare global {
   }
 }
 
+type PageView =
+  | "Explore"
+  | "HowItWorks"
+  | "About"
+  | "CampaignDetail"
+  | "CreateCampaign";
+
 const CrowdfundingMainPage: React.FC = () => {
+  //Page
+  const [currentPage, setCurrentPage] = useState<PageView>("Explore");
+
+  const handleNavigation = (page: PageView) => {
+    setSelectedCampaign(null);
+    setShowCreateForm(false);
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   //Status
   const [platformStats, setPlatformStats] = useState<PlatformStats>({
     totalProjects: 0,
@@ -356,22 +375,28 @@ const CrowdfundingMainPage: React.FC = () => {
 
   const handleStartCampaign = () => {
     if (!walletConnected) {
-      notify("Please connect your wallet first to create a campaign", "error");
+      notify(
+        "Please connect your wallet first to create a campaign",
+        "warning"
+      );
       return;
     }
     setShowCreateForm(true);
+    setCurrentPage("CreateCampaign");
   };
 
   // Campaign details
 
   const handleViewDetails = (campaign: Campaign) => {
     setSelectedCampaign(campaign);
+    setCurrentPage("CampaignDetail");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleBackToCampaigns = async () => {
     setSelectedCampaign(null);
     await loadCampaigns();
+    setCurrentPage("Explore");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -713,7 +738,7 @@ const CrowdfundingMainPage: React.FC = () => {
   }, [walletConnected, walletAddress]);
 
   return (
-    <div className="min-vh-100 bg-light">
+    <div className="d-flex flex-column min-vh-100 bg-light">
       <ToastContainer position="top-right" autoClose={5000} />
       <Navbar
         walletConnected={walletConnected}
@@ -721,217 +746,235 @@ const CrowdfundingMainPage: React.FC = () => {
         balance={balance}
         onConnectWallet={connectWallet}
         onDisconnectWallet={disconnectWallet}
+        onNavigate={handleNavigation}
+        activePage={currentPage}
       />
 
-      {selectedCampaign ? (
-        (console.log("Selected Campaign:", selectedCampaign),
-        console.log("Wallet Address:", walletAddress),
-        console.log("Wallet creator:", selectedCampaign.creator),
-        console.log("Is Owner:", walletAddress === selectedCampaign.creator),
-        (
-          <CampaignDetail
-            campaign={selectedCampaign}
-            onBack={handleBackToCampaigns}
-            onDonate={(amount) => handleDonate(amount)}
-            onClaimFunds={handleClaimFunds}
-            onRefund={handleRefund}
-            walletConnected={walletConnected}
-            isOwner={walletAddress === selectedCampaign.creator}
-          />
-        ))
-      ) : (
-        <>
-          {/* Hero Section */}
-          <section className="bg-primary text-white py-5">
-            <div className="container">
-              <div className="row align-items-center">
-                <div className="col-lg-6 mb-3 mb-md-0">
-                  <h1 className="display-4 fw-bold mb-4">
-                    Crowdfunding for Innovation
-                  </h1>
-                  <p className="lead mb-4">
-                    Dare to fund the future with blockchain technology. Secure,
-                    transparent, and decentralized support for projects
-                    worldwide.
-                  </p>
-                  <div className="d-flex gap-3">
-                    <button
-                      className="btn btn-warning btn-lg"
-                      onClick={handleStartCampaign}
-                    >
-                      Start a Campaign
-                    </button>
-                  </div>
-                </div>
-                <div className="col-lg-6 text-center">
-                  <div className="bg-white bg-opacity-10 rounded-4 p-4">
-                    {/* Platform Stats with made */}
-                    <h3 className="mb-3">Platform Stats</h3>
-                    <div className="row">
-                      <div className="col-4">
-                        <h4 className="text-warning">
-                          {" "}
-                          {platformStats.totalProjects.toLocaleString()}
-                        </h4>
-                        <small>Projects Funded</small>
-                      </div>
-                      <div className="col-4">
-                        <h4 className="text-warning">
-                          {" "}
-                          {platformStats.totalRaisedETH.toLocaleString()} ETH
-                        </h4>
-                        <small>Total Raised</small>
-                      </div>
-                      <div className="col-4">
-                        <h4 className="text-warning">
-                          {platformStats.successRate}%
-                        </h4>
-                        <small>Success Rate</small>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
+      <div className="flex-grow-1">
+        {currentPage === "HowItWorks" && <HowItWorksPage />}
+        {currentPage === "About" && <AboutPage />}
 
-          {/* Search and Filters */}
-          <section className="py-4 bg-white shadow-sm">
-            <div className="container">
-              <div className="row align-items-center">
-                <div className="col-md-5 mb-3 mb-md-0">
-                  <div className="input-group">
-                    <span className="input-group-text">
-                      <i className="bi bi-search"></i>
-                    </span>
-                    <input
-                      type="text"
-                      className="form-control"
-                      placeholder="Search campaigns..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <div className="col-md-7">
-                  <div className="d-flex gap-2 flex-wrap justify-content-md-end">
-                    {categories.map((category) => (
-                      <button
-                        key={category}
-                        className={`btn btn-sm ${
-                          selectedCategory === category
-                            ? "btn-primary"
-                            : "btn-outline-primary"
-                        }`}
-                        onClick={() => setSelectedCategory(category)}
-                      >
-                        {category}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Campaigns Grid */}
-          <section className="py-5">
-            <div className="container">
-              <div className="row mb-4">
-                <div className="col">
-                  <h2 className="fw-bold">Active Campaigns</h2>
-                  <p className="text-muted">
-                    Discover and support innovative projects
-                  </p>
-                </div>
-              </div>
-
-              <div className="row g-4">
-                {filteredCampaigns.map((campaign) => (
-                  <div key={campaign.id} className="col-lg-6 col-xl-4">
-                    <div className="card h-100 shadow-sm hover-shadow">
-                      <img
-                        src={campaign.image}
-                        className="card-img-top"
-                        alt={campaign.title}
-                        style={{ height: "200px", objectFit: "cover" }}
-                      />
-                      <div className="card-body d-flex flex-column">
-                        <div className="d-flex justify-content-between align-items-start mb-2">
-                          <span className="badge bg-secondary">
-                            {campaign.category}
-                          </span>
-                          <small className="text-muted">
-                            {campaign.timeLeft || `${campaign.daysLeft} days`}{" "}
-                            left
-                          </small>
-                        </div>
-
-                        <h5 className="card-title">{campaign.title}</h5>
-                        <p className="card-text text-muted flex-grow-1">
-                          {campaign.description}
+        {(currentPage === "Explore" ||
+          currentPage === "CampaignDetail" ||
+          currentPage === "CreateCampaign") && (
+          <>
+            {selectedCampaign ? (
+              (console.log("Selected Campaign:", selectedCampaign),
+              console.log("Wallet Address:", walletAddress),
+              console.log("Wallet creator:", selectedCampaign.creator),
+              console.log(
+                "Is Owner:",
+                walletAddress === selectedCampaign.creator
+              ),
+              (
+                <CampaignDetail
+                  campaign={selectedCampaign}
+                  onBack={handleBackToCampaigns}
+                  onDonate={(amount) => handleDonate(amount)}
+                  onClaimFunds={handleClaimFunds}
+                  onRefund={handleRefund}
+                  walletConnected={walletConnected}
+                  isOwner={walletAddress === selectedCampaign.creator}
+                />
+              ))
+            ) : (
+              <>
+                {/* Hero Section */}
+                <section className="bg-primary text-white py-5">
+                  <div className="container">
+                    <div className="row align-items-center">
+                      <div className="col-lg-6 mb-3 mb-md-0">
+                        <h1 className="display-4 fw-bold mb-4">
+                          Crowdfunding for Innovation
+                        </h1>
+                        <p className="lead mb-4">
+                          Dare to fund the future with blockchain technology.
+                          Secure, transparent, and decentralized support for
+                          projects worldwide.
                         </p>
-
-                        <div className="mb-3">
-                          <div className="d-flex justify-content-between mb-1">
-                            <small className="text-muted">Progress</small>
-                            <small className="text-muted">
-                              {campaign.raised} ETH of {campaign.goal} ETH
-                            </small>
-                          </div>
-                          <div className="progress">
-                            <div
-                              className="progress-bar bg-success"
-                              style={{
-                                width: `${calculateProgress(
-                                  campaign.raised,
-                                  campaign.goal
-                                )}%`,
-                              }}
-                            ></div>
-                          </div>
-                          <small className="text-muted">
-                            {calculateProgress(
-                              campaign.raised,
-                              campaign.goal
-                            ).toFixed(1)}
-                            % funded
-                          </small>
-                        </div>
-
-                        <div className="d-flex justify-content-between align-items-center">
-                          <small className="text-muted">
-                            by {formatAddress(campaign.creator)}
-                          </small>
+                        <div className="d-flex gap-3">
                           <button
-                            className="btn btn-primary"
-                            onClick={() => handleViewDetails(campaign)}
+                            className="btn btn-warning btn-lg"
+                            onClick={handleStartCampaign}
                           >
-                            View Details
+                            Start a Campaign
                           </button>
                         </div>
                       </div>
+                      <div className="col-lg-6 text-center">
+                        <div className="bg-white bg-opacity-10 rounded-4 p-4">
+                          {/* Platform Stats with made */}
+                          <h3 className="mb-3">Platform Stats</h3>
+                          <div className="row">
+                            <div className="col-4">
+                              <h4 className="text-warning">
+                                {" "}
+                                {platformStats.totalProjects.toLocaleString()}
+                              </h4>
+                              <small>Projects Funded</small>
+                            </div>
+                            <div className="col-4">
+                              <h4 className="text-warning">
+                                {" "}
+                                {platformStats.totalRaisedETH.toLocaleString()}{" "}
+                                ETH
+                              </h4>
+                              <small>Total Raised</small>
+                            </div>
+                            <div className="col-4">
+                              <h4 className="text-warning">
+                                {platformStats.successRate}%
+                              </h4>
+                              <small>Success Rate</small>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                ))}
-              </div>
+                </section>
 
-              {filteredCampaigns.length === 0 && (
-                <div className="text-center py-5">
-                  <h4 className="text-muted">
-                    {selectedCategory === "My Campaigns"
-                      ? "You haven't created any campaigns yet"
-                      : "No campaigns found"}
-                  </h4>
-                  <p className="text-muted">
-                    Try adjusting your search or filter criteria
-                  </p>
-                </div>
-              )}
-            </div>
-          </section>
-        </>
-      )}
+                {/* Search and Filters */}
+                <section className="py-4 bg-white shadow-sm">
+                  <div className="container">
+                    <div className="row align-items-center">
+                      <div className="col-md-5 mb-3 mb-md-0">
+                        <div className="input-group">
+                          <span className="input-group-text">
+                            <i className="bi bi-search"></i>
+                          </span>
+                          <input
+                            type="text"
+                            className="form-control"
+                            placeholder="Search campaigns..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      <div className="col-md-7">
+                        <div className="d-flex gap-2 flex-wrap justify-content-md-end">
+                          {categories.map((category) => (
+                            <button
+                              key={category}
+                              className={`btn btn-sm ${
+                                selectedCategory === category
+                                  ? "btn-primary"
+                                  : "btn-outline-primary"
+                              }`}
+                              onClick={() => setSelectedCategory(category)}
+                            >
+                              {category}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                {/* Campaigns Grid */}
+                <section className="py-5">
+                  <div className="container">
+                    <div className="row mb-4">
+                      <div className="col">
+                        <h2 className="fw-bold">Active Campaigns</h2>
+                        <p className="text-muted">
+                          Discover and support innovative projects
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="row g-4">
+                      {filteredCampaigns.map((campaign) => (
+                        <div key={campaign.id} className="col-lg-6 col-xl-4">
+                          <div className="card h-100 shadow-sm hover-shadow">
+                            <img
+                              src={campaign.image}
+                              className="card-img-top"
+                              alt={campaign.title}
+                              style={{ height: "200px", objectFit: "cover" }}
+                            />
+                            <div className="card-body d-flex flex-column">
+                              <div className="d-flex justify-content-between align-items-start mb-2">
+                                <span className="badge bg-secondary">
+                                  {campaign.category}
+                                </span>
+                                <small className="text-muted">
+                                  {campaign.timeLeft ||
+                                    `${campaign.daysLeft} days`}{" "}
+                                  left
+                                </small>
+                              </div>
+
+                              <h5 className="card-title">{campaign.title}</h5>
+                              <p className="card-text text-muted flex-grow-1">
+                                {campaign.description}
+                              </p>
+
+                              <div className="mb-3">
+                                <div className="d-flex justify-content-between mb-1">
+                                  <small className="text-muted">Progress</small>
+                                  <small className="text-muted">
+                                    {campaign.raised} ETH of {campaign.goal} ETH
+                                  </small>
+                                </div>
+                                <div className="progress">
+                                  <div
+                                    className="progress-bar bg-success"
+                                    style={{
+                                      width: `${calculateProgress(
+                                        campaign.raised,
+                                        campaign.goal
+                                      )}%`,
+                                    }}
+                                  ></div>
+                                </div>
+                                <small className="text-muted">
+                                  {calculateProgress(
+                                    campaign.raised,
+                                    campaign.goal
+                                  ).toFixed(1)}
+                                  % funded
+                                </small>
+                              </div>
+
+                              <div className="d-flex justify-content-between align-items-center">
+                                <small className="text-muted">
+                                  by {formatAddress(campaign.creator)}
+                                </small>
+                                <button
+                                  className="btn btn-primary"
+                                  onClick={() => handleViewDetails(campaign)}
+                                >
+                                  View Details
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {filteredCampaigns.length === 0 && (
+                      <div className="text-center py-5">
+                        <h4 className="text-muted">
+                          {selectedCategory === "My Campaigns"
+                            ? "You haven't created any campaigns yet"
+                            : "No campaigns found"}
+                        </h4>
+                        <p className="text-muted">
+                          Try adjusting your search or filter criteria
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              </>
+            )}
+          </>
+        )}
+      </div>
       <Footer />
 
       {showCreateForm && (
