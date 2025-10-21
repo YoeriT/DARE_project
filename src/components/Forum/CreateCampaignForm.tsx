@@ -19,6 +19,8 @@ interface Campaign {
 const CROWDFUNDING_ABI = CrowdFundingArtifact.abi;
 const CROWDFUNDING_BYTECODE = CrowdFundingArtifact.bytecode;
 
+const SEPOLIA_CHAIN_ID = "0xaa36a7";
+
 interface CreateCampaignFormProps {
   onSubmit: (campaign: Campaign) => void;
   onCancel: () => void;
@@ -30,6 +32,61 @@ const CreateCampaignForm: React.FC<CreateCampaignFormProps> = ({
   onCancel,
   walletAddress,
 }) => {
+  const [isDeploying, setIsDeploying] = useState(false);
+
+  // Check if user is on Sepolia network
+  const checkNetwork = async (): Promise<boolean> => {
+    try {
+      const chainId = await window.ethereum.request({ method: "eth_chainId" });
+
+      if (chainId !== SEPOLIA_CHAIN_ID) {
+        notify("Please switch to Sepolia testnet", "warning");
+
+        // Try to switch to Sepolia automatically
+        try {
+          await window.ethereum.request({
+            method: "wallet_switchEthereumChain",
+            params: [{ chainId: SEPOLIA_CHAIN_ID }],
+          });
+          return true;
+        } catch (switchError: any) {
+          // This error code indicates that the chain has not been added to MetaMask
+          if (switchError.code === 4902) {
+            try {
+              await window.ethereum.request({
+                method: "wallet_addEthereumChain",
+                params: [
+                  {
+                    chainId: SEPOLIA_CHAIN_ID,
+                    chainName: "Sepolia Testnet",
+                    nativeCurrency: {
+                      name: "SepoliaETH",
+                      symbol: "ETH",
+                      decimals: 18,
+                    },
+                    rpcUrls: ["https://sepolia.infura.io/v3/"],
+                    blockExplorerUrls: ["https://sepolia.etherscan.io"],
+                  },
+                ],
+              });
+              return true;
+            } catch (addError) {
+              notify("Failed to add Sepolia network", "error");
+              return false;
+            }
+          }
+          notify("Failed to switch to Sepolia network", "error");
+          return false;
+        }
+      }
+      return true;
+    } catch (error) {
+      console.error("Network check failed:", error);
+      notify("Failed to check network", "error");
+      return false;
+    }
+  };
+
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -62,7 +119,19 @@ const CreateCampaignForm: React.FC<CreateCampaignFormProps> = ({
       return;
     }
 
+    // Validate inputs
+    if (parseFloat(formData.goal) <= 0) {
+      notify("Goal must be greater than 0 ETH", "warning");
+      return;
+    }
+
+    if (parseInt(formData.daysLeft) <= 0) {
+      notify("Duration must be at least 1 day", "warning");
+      return;
+    }
+
     try {
+      setIsDeploying(true);
       // Check if MetaMask is available
       if (!window.ethereum) {
         notify("Please install MetaMask to create a campaign!", "error");
@@ -72,8 +141,26 @@ const CreateCampaignForm: React.FC<CreateCampaignFormProps> = ({
       // Request account access
       await window.ethereum.request({ method: "eth_requestAccounts" });
 
+      const isCorrectNetwork = await checkNetwork();
+      if (!isCorrectNetwork) {
+        setIsDeploying(false);
+        return;
+      }
+
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
+
+      const balance = await provider.getBalance(walletAddress);
+      const balanceInEth = parseFloat(ethers.formatEther(balance));
+
+      if (balanceInEth < 0.01) {
+        notify(
+          "Insufficient ETH for deployment. You need at least 0.01 ETH for gas fees.",
+          "error"
+        );
+        setIsDeploying(false);
+        return;
+      }
 
       // Convert goal to Wei (smallest ETH unit)
       const goalInWei = ethers.parseEther(formData.goal);
@@ -151,6 +238,8 @@ const CreateCampaignForm: React.FC<CreateCampaignFormProps> = ({
       } else {
         notify("Failed to deploy contract", "error");
       }
+    } finally {
+      setIsDeploying(false);
     }
   };
 
@@ -204,6 +293,8 @@ const CreateCampaignForm: React.FC<CreateCampaignFormProps> = ({
                   value={formData.description}
                   onChange={handleChange}
                   placeholder="Describe your project and why people should fund it"
+                  disabled={isDeploying}
+                  required
                 />
               </div>
 
@@ -219,9 +310,13 @@ const CreateCampaignForm: React.FC<CreateCampaignFormProps> = ({
                       value={formData.goal}
                       onChange={handleChange}
                       placeholder="e.g. 10.5"
+                      disabled={isDeploying}
+                      required
                     />
+                    <small className="text-muted">Minimum: 0.01 ETH</small>
                   </div>
                 </div>
+
                 <div className="col-md-6">
                   <div className="mb-3">
                     <label className="form-label">
@@ -234,7 +329,10 @@ const CreateCampaignForm: React.FC<CreateCampaignFormProps> = ({
                       value={formData.daysLeft}
                       onChange={handleChange}
                       placeholder="e.g. 30"
+                      disabled={isDeploying}
+                      required
                     />
+                    <small className="text-muted">Minimum: 1 day</small>
                   </div>
                 </div>
               </div>
@@ -246,6 +344,7 @@ const CreateCampaignForm: React.FC<CreateCampaignFormProps> = ({
                   name="category"
                   value={formData.category}
                   onChange={handleChange}
+                  disabled={isDeploying}
                 >
                   {categories.map((cat) => (
                     <option key={cat} value={cat}>
@@ -264,6 +363,7 @@ const CreateCampaignForm: React.FC<CreateCampaignFormProps> = ({
                   value={formData.image}
                   onChange={handleChange}
                   placeholder="https://example.com/image.jpg"
+                  disabled={isDeploying}
                 />
               </div>
             </div>
@@ -273,11 +373,27 @@ const CreateCampaignForm: React.FC<CreateCampaignFormProps> = ({
                 type="button"
                 className="btn btn-secondary"
                 onClick={onCancel}
+                disabled={isDeploying}
               >
                 Cancel
               </button>
-              <button type="submit" className="btn btn-primary">
-                Create Campaign
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={isDeploying}
+              >
+                {isDeploying ? (
+                  <>
+                    <span
+                      className="spinner-border spinner-border-sm me-2"
+                      role="status"
+                      aria-hidden="true"
+                    ></span>
+                    Deploying...
+                  </>
+                ) : (
+                  "Create Campaign"
+                )}
               </button>
             </div>
           </form>

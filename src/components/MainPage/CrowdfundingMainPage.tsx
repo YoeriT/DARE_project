@@ -543,8 +543,9 @@ const CrowdfundingMainPage: React.FC = () => {
       } else {
         // Not the last refund, just refresh data
         await refreshCampaignData();
-        await getBalance(walletAddress);
       }
+
+      await getBalance(walletAddress);
 
       notify("Refund processed successfully!", "success");
     } catch (error: any) {
